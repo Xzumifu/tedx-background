@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>TEDx Fluid System (True 3-Pass)</title>
+<title>IITH-style Fluid Ink</title>
 
 <style>
 html,body{
@@ -22,9 +22,7 @@ canvas{ display:block; }
 
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
-/* ======================
-   SETUP
-====================== */
+/* ---------------- SETUP ---------------- */
 
 const scene = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
@@ -34,78 +32,28 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
-/* ======================
-   RENDER TARGETS
-====================== */
-
-const size = () => new THREE.Vector2(window.innerWidth, window.innerHeight);
+/* ---------------- RENDER TARGETS ---------------- */
 
 const rtA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
 const rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
 
-const velA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
-const velB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+let prev = rtA;
+let curr = rtB;
 
-/* ======================
-   UNIFORMS
-====================== */
+/* ---------------- UNIFORMS ---------------- */
 
-const common = {
+const U = {
     uTime: { value: 0 },
     uMouse: { value: new THREE.Vector2(0.5,0.5) },
-    uVelocity: { value: new THREE.Vector2(0,0) }
+    uVelocity: { value: new THREE.Vector2(0,0) },
+    uPrev: { value: null }
 };
 
-/* ======================
-   CURL NOISE
-====================== */
+/* ---------------- SHADER ---------------- */
 
-const curlGLSL = `
-float hash(vec2 p){
-    return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453);
-}
+const mat = new THREE.ShaderMaterial({
 
-float noise(vec2 p){
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f*f*(3.0-2.0*f);
-
-    float a = hash(i);
-    float b = hash(i+vec2(1.,0.));
-    float c = hash(i+vec2(0.,1.));
-    float d = hash(i+vec2(1.,1.));
-
-    return mix(a,b,u.x) +
-           (c-a)*u.y*(1.0-u.x) +
-           (d-b)*u.x*u.y;
-}
-
-vec2 curl(vec2 p){
-    float e = 0.0015;
-    float n1 = noise(p + vec2(0,e));
-    float n2 = noise(p - vec2(0,e));
-    float a = n1 - n2;
-
-    float n3 = noise(p + vec2(e,0));
-    float n4 = noise(p - vec2(e,0));
-    float b = n3 - n4;
-
-    return vec2(a,-b);
-}
-`;
-
-/* ======================
-   PASS 1 — VELOCITY
-====================== */
-
-const velMat = new THREE.ShaderMaterial({
-
-uniforms: {
-    uTime: common.uTime,
-    uMouse: common.uMouse,
-    uPrev: { value: null },
-    uVelocity: common.uVelocity
-},
+uniforms: U,
 
 vertexShader: `
 varying vec2 vUv;
@@ -125,226 +73,196 @@ uniform sampler2D uPrev;
 
 varying vec2 vUv;
 
-${curlGLSL}
+/* ---------------- NOISE ---------------- */
+
+float hash(vec2 p){
+    return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453);
+}
+
+float noise(vec2 p){
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+
+    vec2 u = f*f*(3.0-2.0*f);
+
+    float a = hash(i);
+    float b = hash(i+vec2(1.,0.));
+    float c = hash(i+vec2(0.,1.));
+    float d = hash(i+vec2(1.,1.));
+
+    return mix(a,b,u.x) +
+           (c-a)*u.y*(1.0-u.x) +
+           (d-b)*u.x*u.y;
+}
+
+/* curl field */
+vec2 curl(vec2 p){
+    float e = 0.0012;
+
+    float n1 = noise(p + vec2(0,e));
+    float n2 = noise(p - vec2(0,e));
+    float a = n1 - n2;
+
+    float n3 = noise(p + vec2(e,0));
+    float n4 = noise(p - vec2(e,0));
+    float b = n3 - n4;
+
+    return vec2(a,-b);
+}
+
+/* multi-scale flow (IMPORTANT FOR IITH LOOK) */
+vec2 flowField(vec2 p, float t){
+
+    vec2 f1 = curl(p * 1.2 + t * 0.2);   // macro flow
+    vec2 f2 = curl(p * 2.8 - t * 0.3);   // micro turbulence
+
+    return f1 * 0.7 + f2 * 0.3;
+}
 
 void main(){
 
     vec2 uv = vUv;
-    vec2 v = texture2D(uPrev, uv).xy;
+    float t = uTime * 0.1;
 
-    vec2 p = uv * 2.5;
+    /* ---------------- PREVIOUS STATE ---------------- */
 
-    vec2 flow = curl(p + uTime*0.1);
+    vec3 prevCol = texture2D(uPrev, uv).rgb;
+
+    /* ---------------- FLOW ---------------- */
+
+    vec2 p = uv * 2.0;
+
+    vec2 flow = flowField(p, t);
+
+    /* gentle global drift (TEDx/IITH signature motion) */
+    flow += vec2(0.06, 0.02);
+
+    p += flow * 0.45;
+
+    /* ---------------- CURSOR (SOFT INJECTION ONLY) ---------------- */
 
     vec2 d = uv - uMouse;
     float dist = length(d);
-    float force = exp(-dist*dist*6.0);
+
+    float influence = exp(-dist * dist * 6.0);
 
     vec2 swirl = vec2(-d.y, d.x);
 
-    v += flow * 0.05;
-    v += swirl * force * 0.3;
-    v += uVelocity * force * 0.2;
+    p += swirl * influence * 0.18;
+    p += uVelocity * influence * 0.08;
 
-    v *= 0.92; // damping
+    /* ---------------- DYE FIELD (SPARSE INK) ---------------- */
 
-    gl_FragColor = vec4(v,0.0,1.0);
-}
-`
-});
+    float n1 = noise(p + t);
+    float n2 = noise(p * 1.6 - t);
 
-/* ======================
-   PASS 2 — DYE (INK)
-====================== */
+    float ink = mix(n1, n2, 0.5);
 
-const dyeMat = new THREE.ShaderMaterial({
+    /* IMPORTANT: lower density (fix blob issue) */
+    ink = smoothstep(0.38, 0.72, ink);
+    ink = pow(ink, 1.2);
 
-uniforms: {
-    uTime: common.uTime,
-    uMouse: common.uMouse,
-    uVelTex: { value: null },
-    uPrev: { value: null }
-},
+    /* ---------------- BREAKUP (CRITICAL FIX FOR SINGLE BLOB) ---------------- */
 
-vertexShader: `
-varying vec2 vUv;
-void main(){
-    vUv = uv;
-    gl_Position = vec4(position,1.0);
-}
-`,
+    float breakup = noise(p * 3.5 - t);
+    ink *= mix(0.65, 1.1, breakup);
 
-fragmentShader: `
-precision highp float;
+    /* ---------------- DYE INJECTION (VERY SUBTLE) ---------------- */
 
-uniform float uTime;
-uniform vec2 uMouse;
-uniform sampler2D uVelTex;
-uniform sampler2D uPrev;
+    float inject = influence * 0.35;
+    ink += inject;
 
-varying vec2 vUv;
+    /* ---------------- TEMPORAL ACCUMULATION ---------------- */
 
-${curlGLSL}
+    vec3 fresh = vec3(0.0);
 
-void main(){
+/* thin mist */
+fresh += vec3(0.10,0.09,0.09) * ink * 0.8;
 
-    vec2 uv = vUv;
+/* controlled red core (NOT dominant) */
+fresh += vec3(0.45,0.05,0.05) * pow(ink,1.8);
 
-    vec2 vel = texture2D(uVelTex, uv).xy;
+/* grey atmospheric blend */
+float haze = smoothstep(0.2,0.9,ink);
+fresh += vec3(0.18) * haze * 0.2;
 
-    /* advection */
-    vec2 advUV = uv - vel * 0.01;
+/* velocity-based light reaction */
+fresh += vec3(flow.x*0.03,0.0,flow.y*0.03);
 
-    float ink = texture2D(uPrev, advUV).r;
+/* ---------------- SMOOTH FEEDBACK ---------------- */
 
-    /* injection at mouse */
-    float d = length(uv - uMouse);
-    float add = exp(-d*d*8.0);
+vec3 col = mix(prevCol * 0.94, fresh, 0.06);
 
-    ink += add * 0.5;
+/* ---------------- FINAL GRADING ---------------- */
 
-    /* diffusion */
-    ink *= 0.985;
+float vignette = smoothstep(1.3,0.2,length(uv-0.5));
 
-    gl_FragColor = vec4(ink,0.0,0.0,1.0);
-}
-`
-});
+col *= vignette;
 
-/* ======================
-   PASS 3 — DISPLAY
-====================== */
+/* prevent over-red saturation */
+col *= 0.9;
 
-const displayMat = new THREE.ShaderMaterial({
-
-uniforms: {
-    uTime: common.uTime,
-    uInk: { value: null },
-    uVel: { value: null }
-},
-
-vertexShader: `
-varying vec2 vUv;
-void main(){
-    vUv = uv;
-    gl_Position = vec4(position,1.0);
-}
-`,
-
-fragmentShader: `
-precision highp float;
-
-uniform sampler2D uInk;
-uniform sampler2D uVel;
-
-varying vec2 vUv;
-
-void main(){
-
-    vec2 uv = vUv;
-
-    float ink = texture2D(uInk, uv).r;
-    vec2 vel = texture2D(uVel, uv).xy;
-
-    float haze = smoothstep(0.2, 0.9, ink);
-
-    vec3 col = vec3(0.0);
-
-/* soft red ink */
-col += vec3(0.12,0.02,0.02) * ink;
-
-/* core red */
-col += vec3(0.55,0.05,0.05) * pow(ink,1.8);
-
-/* grey transition layer */
-col += vec3(0.18) * haze * 0.2;
-
-/* light reactive tint */
-col += vec3(vel.x*0.05,0.0,vel.y*0.05);
-
-/* vignette */
-float d = length(uv-0.5);
-col *= smoothstep(1.2,0.2,d);
-
-col += 0.02;
+/* lift blacks (water feel, not paint) */
+col += 0.012;
 
 gl_FragColor = vec4(col,1.0);
 }
 `
 });
 
-/* ======================
-   QUAD
-====================== */
+/* ---------------- QUAD ---------------- */
 
-const quad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), velMat);
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat);
 scene.add(quad);
 
-/* ======================
-   MOUSE
-====================== */
+/* ---------------- MOUSE ---------------- */
 
-let prev = new THREE.Vector2();
+let prevM = new THREE.Vector2();
 let target = new THREE.Vector2();
 
 window.addEventListener("mousemove",(e)=>{
 
-    let mx = e.clientX/window.innerWidth;
-    let my = 1 - e.clientY/window.innerHeight;
+    let mx = e.clientX / window.innerWidth;
+    let my = 1 - e.clientY / window.innerHeight;
 
-    common.uVelocity.value.x = (mx - prev.x)*5;
-    common.uVelocity.value.y = (my - prev.y)*5;
+    U.uVelocity.value.x = (mx - prevM.x) * 4.0;
+    U.uVelocity.value.y = (my - prevM.y) * 4.0;
 
-    prev.set(mx,my);
+    prevM.set(mx,my);
     target.set(mx,my);
 });
 
-/* ======================
-   LOOP
-====================== */
+/* ---------------- RESIZE ---------------- */
 
-function swap(a,b){
-    return [b,a];
-}
+window.addEventListener("resize",()=>{
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    rtA.setSize(window.innerWidth, window.innerHeight);
+    rtB.setSize(window.innerWidth, window.innerHeight);
+});
 
-let vA = velA, vB = velB;
-let dA = rtA, dB = rtB;
+/* ---------------- LOOP ---------------- */
 
 function animate(){
 
     requestAnimationFrame(animate);
 
-    common.uTime.value += 0.016;
+    U.uTime.value += 0.016;
 
-    common.uMouse.value.lerp(target,0.05);
-    common.uVelocity.value.multiplyScalar(0.9);
+    U.uMouse.value.lerp(target,0.04);
+    U.uVelocity.value.multiplyScalar(0.92);
 
-    /* -------- PASS 1: VELOCITY -------- */
-    quad.material = velMat;
-    velMat.uniforms.uPrev.value = vA.texture;
+    /* feedback */
+    U.uPrev.value = prev.texture;
 
-    renderer.setRenderTarget(vB);
+    renderer.setRenderTarget(curr);
     renderer.render(scene,camera);
-
-    [vA,vB] = swap(vA,vB);
-
-    /* -------- PASS 2: DYE -------- */
-    quad.material = dyeMat;
-    dyeMat.uniforms.uVelTex.value = vA.texture;
-    dyeMat.uniforms.uPrev.value = dA.texture;
-
-    renderer.setRenderTarget(dB);
-    renderer.render(scene,camera);
-
-    [dA,dB] = swap(dA,dB);
-
-    /* -------- PASS 3: DISPLAY -------- */
-    quad.material = displayMat;
-    displayMat.uniforms.uInk.value = dA.texture;
-    displayMat.uniforms.uVel.value = vA.texture;
 
     renderer.setRenderTarget(null);
     renderer.render(scene,camera);
+
+    let temp = prev;
+    prev = curr;
+    curr = temp;
 }
 
 animate();
