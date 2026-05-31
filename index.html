@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Fluid Ink + Repulsion</title>
+<title>Physical Fluid Simulation</title>
 
 <style>
 html,body{
@@ -22,21 +22,21 @@ canvas{ display:block; }
 
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
-/* =======================
+/* =========================
    SETUP
-======================= */
+========================= */
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-document.body.appendChild(renderer.domElement);
-
-/* =======================
-   FEEDBACK
-======================= */
+/* =========================
+   DOUBLE BUFFER
+========================= */
 
 const rtA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
 const rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
@@ -44,9 +44,9 @@ const rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
 let prev = rtA;
 let curr = rtB;
 
-/* =======================
+/* =========================
    UNIFORMS
-======================= */
+========================= */
 
 const U = {
     uTime: { value: 0 },
@@ -55,9 +55,9 @@ const U = {
     uPrev: { value: null }
 };
 
-/* =======================
-   SHADER
-======================= */
+/* =========================
+   PHYSICAL FLUID SHADER
+========================= */
 
 const mat = new THREE.ShaderMaterial({
 
@@ -81,18 +81,21 @@ uniform sampler2D uPrev;
 
 varying vec2 vUv;
 
-/* =======================
-   NOISE + CURL
-======================= */
+/* =========================
+   NOISE (FOR SMALL PERTURBATIONS ONLY)
+========================= */
 
 float hash(vec2 p){
     return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453);
 }
 
+/* =========================
+   CURL FIELD (VELOCITY BASE)
+========================= */
+
 float noise(vec2 p){
     vec2 i = floor(p);
     vec2 f = fract(p);
-
     vec2 u = f*f*(3.0-2.0*f);
 
     float a = hash(i);
@@ -106,7 +109,7 @@ float noise(vec2 p){
 }
 
 vec2 curl(vec2 p){
-    float e = 0.0012;
+    float e = 0.0015;
 
     float n1 = noise(p + vec2(0,e));
     float n2 = noise(p - vec2(0,e));
@@ -119,108 +122,110 @@ vec2 curl(vec2 p){
     return vec2(a,-b);
 }
 
-/* =======================
+/* =========================
    MAIN
-======================= */
+========================= */
 
 void main(){
 
     vec2 uv = vUv;
-    float t = uTime * 0.09;
+    float t = uTime * 0.06;
 
     vec3 prevCol = texture2D(uPrev, uv).rgb;
 
-    vec2 p = uv * 2.2;
+    /* =========================
+       VELOCITY FIELD (REAL FLUID CORE)
+    ========================= */
 
-    vec2 flow = curl(p + t);
+    vec2 p = uv * 2.0;
 
-    /* slight global drift (prevents center collapse) */
-    flow += vec2(0.05, -0.02);
+    vec2 velField =
+        curl(p + t) * 1.2 +
+        curl(p * 2.0 - t) * 0.4;
 
-    p += flow * 0.42;
+    /* weak global drift prevents symmetry collapse */
+    velField += vec2(0.04, -0.015);
 
-    /* =======================
-       CURSOR REPULSION (NEW CORE FIX)
-    ======================= */
+    /* =========================
+       ADVECTION STEP (CRITICAL)
+    ========================= */
+
+    vec2 advectPos = uv - velField * 0.35;
+
+    /* =========================
+       MOUSE FORCE (NOT ATTRACTION)
+    ========================= */
 
     vec2 d = uv - uMouse;
     float dist = length(d);
+    vec2 dir = normalize(d + 0.0001);
 
-    /* soft bubble field */
-    float bubble = exp(-dist * dist * 10.0);
+    float falloff = exp(-dist * 7.0);
 
-    /* outward pressure force */
-    vec2 repelDir = normalize(d + 0.0001);
+    vec2 tangent = vec2(-d.y, d.x);
 
-    /* tangential swirl around bubble edge */
-    vec2 swirl = vec2(-d.y, d.x);
+    /* pressure + swirl injection */
+    velField += dir * falloff * 0.6;
+    velField += tangent * falloff * 0.4;
 
-    /* COMBINE: push + swirl */
-    p += repelDir * bubble * 0.55;   // MAIN REPULSION
-    p += swirl * bubble * 0.22;      // FLUID ROLLING
+    velField += uVel * falloff * 0.15;
 
-    /* velocity interaction */
-    p += uVel * bubble * 0.12;
+    /* =========================
+       DYE (ADVECTION BASED, NOT NOISE DRIVEN)
+    ========================= */
 
-    /* =======================
-       INK FIELD
-    ======================= */
+    float dye = texture2D(uPrev, advectPos).r;
 
-    float base = noise(p + t);
-    float detail = noise(p * 2.8 - t);
+    /* controlled injection near cursor */
+    dye += falloff * 0.3;
 
-    float ink = base * 0.65 + detail * 0.35;
+    /* very light diffusion */
+    dye = mix(dye, texture2D(uPrev, uv + velField * 0.02).r, 0.92);
 
-    ink = smoothstep(0.38, 0.78, ink);
-    ink = pow(ink, 0.92);
+    dye = smoothstep(0.35, 0.85, dye);
+    dye = pow(dye, 0.95);
 
-    /* breakup to avoid blobs */
-    float breakup = noise(p * 3.2 - t);
-    ink *= mix(0.7, 1.2, breakup);
+    /* breakup */
+    dye *= mix(0.75, 1.1, noise(p * 3.0 + t));
 
-    /* =======================
-       COLOR
-    ======================= */
+    /* =========================
+       COLOR RENDERING
+    ========================= */
 
-    vec3 fresh = vec3(0.0);
+    vec3 col = prevCol * 0.92;
 
-/* wispy ink */
-fresh += vec3(0.10,0.09,0.09) * ink * 0.75;
+    /* wispy ink */
+    col += vec3(0.10) * dye * 0.6;
 
-/* controlled red core */
-fresh += vec3(0.52,0.05,0.05) * pow(ink,1.7);
+    /* controlled red core */
+    col += vec3(0.55,0.05,0.05) * pow(dye,1.6);
 
-/* soft grey diffusion */
-float haze = smoothstep(0.2,0.85,ink);
-fresh += vec3(0.15) * haze * 0.15;
+    /* atmospheric grey */
+    col += vec3(0.12) * smoothstep(0.2,0.8,dye) * 0.15;
 
-/* =======================
-   FEEDBACK
-======================= */
+    /* =========================
+       STABILITY FIXES
+    ========================= */
 
-vec3 col = prevCol * 0.90 + fresh * 0.10;
+    float vignette = smoothstep(1.3, 0.2, length(uv - 0.5));
+    col *= vignette;
 
-/* remove center buildup */
-float center = length(uv - 0.5);
-col *= smoothstep(1.25, 0.25, center);
+    col += 0.01;
 
-/* safety lift */
-col += 0.012;
-
-gl_FragColor = vec4(col,1.0);
+    gl_FragColor = vec4(col,1.0);
 }
 `
 });
 
-/* =======================
+/* =========================
    SCENE
-======================= */
+========================= */
 
 scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat));
 
-/* =======================
+/* =========================
    MOUSE
-======================= */
+========================= */
 
 let prevM = new THREE.Vector2();
 let target = new THREE.Vector2();
@@ -230,16 +235,27 @@ window.addEventListener("mousemove",(e)=>{
     let mx = e.clientX / window.innerWidth;
     let my = 1 - e.clientY / window.innerHeight;
 
-    U.uVel.value.x = (mx - prevM.x) * 4.5;
-    U.uVel.value.y = (my - prevM.y) * 4.5;
+    U.uVel.value.x = (mx - prevM.x) * 4.0;
+    U.uVel.value.y = (my - prevM.y) * 4.0;
 
     prevM.set(mx,my);
     target.set(mx,my);
 });
 
-/* =======================
+/* =========================
+   RESIZE
+========================= */
+
+window.addEventListener("resize",()=>{
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    rtA.setSize(window.innerWidth, window.innerHeight);
+    rtB.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* =========================
    LOOP
-======================= */
+========================= */
 
 function animate(){
 
@@ -247,7 +263,7 @@ function animate(){
 
     U.uTime.value += 0.016;
 
-    U.uMouse.value.lerp(target,0.05);
+    U.uMouse.value.lerp(target, 0.05);
     U.uVel.value.multiplyScalar(0.92);
 
     U.uPrev.value = prev.texture;
