@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>IITH-style Fluid Ink</title>
+<title>Fluid Fix</title>
 
 <style>
 html,body{
@@ -22,17 +22,17 @@ canvas{ display:block; }
 
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
-/* ---------------- SETUP ---------------- */
+/* ---------------- BASIC SETUP ---------------- */
 
 const scene = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
-/* ---------------- RENDER TARGETS ---------------- */
+/* ---------------- SAFE SINGLE FEEDBACK PAIR ---------------- */
 
 const rtA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
 const rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
@@ -45,7 +45,7 @@ let curr = rtB;
 const U = {
     uTime: { value: 0 },
     uMouse: { value: new THREE.Vector2(0.5,0.5) },
-    uVelocity: { value: new THREE.Vector2(0,0) },
+    uVel: { value: new THREE.Vector2(0,0) },
     uPrev: { value: null }
 };
 
@@ -68,12 +68,10 @@ precision highp float;
 
 uniform float uTime;
 uniform vec2 uMouse;
-uniform vec2 uVelocity;
+uniform vec2 uVel;
 uniform sampler2D uPrev;
 
 varying vec2 vUv;
-
-/* ---------------- NOISE ---------------- */
 
 float hash(vec2 p){
     return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453);
@@ -82,7 +80,6 @@ float hash(vec2 p){
 float noise(vec2 p){
     vec2 i = floor(p);
     vec2 f = fract(p);
-
     vec2 u = f*f*(3.0-2.0*f);
 
     float a = hash(i);
@@ -95,36 +92,12 @@ float noise(vec2 p){
            (d-b)*u.x*u.y;
 }
 
-/* curl field */
-vec2 curl(vec2 p){
-    float e = 0.0012;
-
-    float n1 = noise(p + vec2(0,e));
-    float n2 = noise(p - vec2(0,e));
-    float a = n1 - n2;
-
-    float n3 = noise(p + vec2(e,0));
-    float n4 = noise(p - vec2(e,0));
-    float b = n3 - n4;
-
-    return vec2(a,-b);
-}
-
-/* multi-scale flow (IMPORTANT FOR IITH LOOK) */
-vec2 flowField(vec2 p, float t){
-
-    vec2 f1 = curl(p * 1.2 + t * 0.2);   // macro flow
-    vec2 f2 = curl(p * 2.8 - t * 0.3);   // micro turbulence
-
-    return f1 * 0.7 + f2 * 0.3;
-}
-
 void main(){
 
     vec2 uv = vUv;
     float t = uTime * 0.1;
 
-    /* ---------------- PREVIOUS STATE ---------------- */
+    /* ---------------- ALWAYS READ PREVIOUS FRAME ---------------- */
 
     vec3 prevCol = texture2D(uPrev, uv).rgb;
 
@@ -132,104 +105,61 @@ void main(){
 
     vec2 p = uv * 2.0;
 
-    vec2 flow = flowField(p, t);
+    vec2 flow = vec2(
+        noise(p + t),
+        noise(p - t)
+    ) - 0.5;
 
-    /* gentle global drift (TEDx/IITH signature motion) */
-    flow += vec2(0.06, 0.02);
+    p += flow * 0.4;
 
-    p += flow * 0.45;
-
-    /* ---------------- CURSOR (SOFT INJECTION ONLY) ---------------- */
+    /* ---------------- CURSOR ---------------- */
 
     vec2 d = uv - uMouse;
     float dist = length(d);
-
     float influence = exp(-dist * dist * 6.0);
 
     vec2 swirl = vec2(-d.y, d.x);
+    p += swirl * influence * 0.2;
 
-    p += swirl * influence * 0.18;
-    p += uVelocity * influence * 0.08;
+    /* ---------------- INK ---------------- */
 
-    /* ---------------- DYE FIELD (SPARSE INK) ---------------- */
+    float ink = noise(p + t);
 
-    float base = noise(p * 1.2 + t);
-float detail = noise(p * 3.5 - t * 0.5);
+    ink = smoothstep(0.4, 0.75, ink);
 
-/* IMPORTANT: restore structure (not fog) */
-float ink = base;
-
-/* add directional filament breakup */
-float stretch = length(flow);
-
-/* creates strands instead of haze */
-ink += detail * stretch * 0.8;
-
-/* sharpen into ink curves */
-ink = smoothstep(0.45, 0.78, ink);
-
-/* preserve thin filaments */
-ink = pow(ink, 0.85);
-
-    /* ---------------- BREAKUP (CRITICAL FIX FOR SINGLE BLOB) ---------------- */
-
-    float breakup = noise(p * 3.5 - t);
-    ink *= mix(0.65, 1.1, breakup);
-
-    /* ---------------- DYE INJECTION (VERY SUBTLE) ---------------- */
-
-    float inject = influence * 0.35;
-    ink += inject;
-
-    /* ---------------- TEMPORAL ACCUMULATION ---------------- */
+    /* IMPORTANT: prevent fog collapse */
+    ink = pow(ink, 0.9);
 
     vec3 fresh = vec3(0.0);
 
-/* thin mist */
-fresh += vec3(0.10,0.09,0.09) * ink * 0.8;
+/* wispy */
+fresh += vec3(0.10) * ink * 0.6;
 
-/* controlled red core (NOT dominant) */
-fresh += vec3(0.45,0.05,0.05) * pow(ink,1.8);
+/* red core (controlled) */
+fresh += vec3(0.5,0.05,0.05) * pow(ink,1.6);
 
-/* grey atmospheric blend */
-float core = smoothstep(0.55, 0.85, ink);
-float mid  = smoothstep(0.35, 0.65, ink);
-float thin = smoothstep(0.15, 0.45, ink);
+/* ---------------- COMPOSITION (CRITICAL FIX) ---------------- */
 
-/* layered ink = liquid perception */
-fresh += vec3(0.08) * thin * 0.6;
-fresh += vec3(0.35,0.04,0.04) * mid;
-fresh += vec3(0.55,0.06,0.06) * core * 0.8;
+vec3 col = prevCol * 0.92 + fresh * 0.08;
 
-/* velocity-based light reaction */
-fresh += vec3(flow.x*0.03,0.0,flow.y*0.03);
+/* safety brightness clamp */
+col = max(col, vec3(0.0));
 
-/* ---------------- SMOOTH FEEDBACK ---------------- */
+/* vignette */
+float d2 = length(uv - 0.5);
+col *= smoothstep(1.2, 0.2, d2);
 
-vec3 col = mix(prevCol * 0.90, fresh, 0.12);
-
-/* ---------------- FINAL GRADING ---------------- */
-
-float vignette = smoothstep(1.3,0.2,length(uv-0.5));
-
-col *= vignette;
-
-/* prevent over-red saturation */
-col *= 0.9;
-
-/* lift blacks (water feel, not paint) */
-col += 0.012;
+/* tiny lift so it NEVER goes black */
+col += 0.01;
 
 gl_FragColor = vec4(col,1.0);
 }
 `
-    col += vec3(flow.x,0.0,flow.y) * 0.01;
 });
 
 /* ---------------- QUAD ---------------- */
 
-const quad = new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat);
-scene.add(quad);
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat));
 
 /* ---------------- MOUSE ---------------- */
 
@@ -241,19 +171,11 @@ window.addEventListener("mousemove",(e)=>{
     let mx = e.clientX / window.innerWidth;
     let my = 1 - e.clientY / window.innerHeight;
 
-    U.uVelocity.value.x = (mx - prevM.x) * 4.0;
-    U.uVelocity.value.y = (my - prevM.y) * 4.0;
+    U.uVel.value.x = (mx - prevM.x) * 5;
+    U.uVel.value.y = (my - prevM.y) * 5;
 
     prevM.set(mx,my);
     target.set(mx,my);
-});
-
-/* ---------------- RESIZE ---------------- */
-
-window.addEventListener("resize",()=>{
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    rtA.setSize(window.innerWidth, window.innerHeight);
-    rtB.setSize(window.innerWidth, window.innerHeight);
 });
 
 /* ---------------- LOOP ---------------- */
@@ -264,10 +186,10 @@ function animate(){
 
     U.uTime.value += 0.016;
 
-    U.uMouse.value.lerp(target,0.04);
-    U.uVelocity.value.multiplyScalar(0.92);
+    U.uMouse.value.lerp(target, 0.05);
+    U.uVel.value.multiplyScalar(0.92);
 
-    /* feedback */
+    /* IMPORTANT: ALWAYS DEFINE PREV */
     U.uPrev.value = prev.texture;
 
     renderer.setRenderTarget(curr);
