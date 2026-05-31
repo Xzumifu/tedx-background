@@ -153,14 +153,23 @@ void main(){
 
     /* ---------------- DYE FIELD (SPARSE INK) ---------------- */
 
-    float n1 = noise(p + t);
-    float n2 = noise(p * 1.6 - t);
+    float base = noise(p * 1.2 + t);
+float detail = noise(p * 3.5 - t * 0.5);
 
-    float ink = mix(n1, n2, 0.5);
+/* IMPORTANT: restore structure (not fog) */
+float ink = base;
 
-    /* IMPORTANT: lower density (fix blob issue) */
-    ink = smoothstep(0.38, 0.72, ink);
-    ink = pow(ink, 1.2);
+/* add directional filament breakup */
+float stretch = length(flow);
+
+/* creates strands instead of haze */
+ink += detail * stretch * 0.8;
+
+/* sharpen into ink curves */
+ink = smoothstep(0.45, 0.78, ink);
+
+/* preserve thin filaments */
+ink = pow(ink, 0.85);
 
     /* ---------------- BREAKUP (CRITICAL FIX FOR SINGLE BLOB) ---------------- */
 
@@ -183,15 +192,21 @@ fresh += vec3(0.10,0.09,0.09) * ink * 0.8;
 fresh += vec3(0.45,0.05,0.05) * pow(ink,1.8);
 
 /* grey atmospheric blend */
-float haze = smoothstep(0.2,0.9,ink);
-fresh += vec3(0.18) * haze * 0.2;
+float core = smoothstep(0.55, 0.85, ink);
+float mid  = smoothstep(0.35, 0.65, ink);
+float thin = smoothstep(0.15, 0.45, ink);
+
+/* layered ink = liquid perception */
+fresh += vec3(0.08) * thin * 0.6;
+fresh += vec3(0.35,0.04,0.04) * mid;
+fresh += vec3(0.55,0.06,0.06) * core * 0.8;
 
 /* velocity-based light reaction */
 fresh += vec3(flow.x*0.03,0.0,flow.y*0.03);
 
 /* ---------------- SMOOTH FEEDBACK ---------------- */
 
-vec3 col = mix(prevCol * 0.94, fresh, 0.06);
+vec3 col = mix(prevCol * 0.90, fresh, 0.12);
 
 /* ---------------- FINAL GRADING ---------------- */
 
@@ -208,6 +223,7 @@ col += 0.012;
 gl_FragColor = vec4(col,1.0);
 }
 `
+    col += vec3(flow.x,0.0,flow.y) * 0.01;
 });
 
 /* ---------------- QUAD ---------------- */
