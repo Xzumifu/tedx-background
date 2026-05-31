@@ -229,11 +229,9 @@ vec2 vortex =
 uv +=
     pull
     *
-    exp(
-        -d * 6.0
-    )
+    exp(-d * 8.0)
     *
-    0.08;
+    0.025;
 
 uv +=
     vortex /
@@ -247,13 +245,13 @@ uv +=
         uVelocity
     )
     *
-    0.6;
+    0.15;
 
     float t =
         uTime * 0.18;
 
     vec2 p =
-        uv * 1.8;
+        uv * 0.45;
 
     p.x +=
         sin(
@@ -272,12 +270,21 @@ uv +=
         cos(t + p.x)
     ) * 0.35;
 
-    float flow =
-        fbm(p+t)
-        *
-        fbm(
-            p*1.7-t
-        );
+    float field =
+    fbm(p+t);
+
+float flow =
+    abs(
+        sin(
+            field * 18.0
+        )
+    );
+
+flow =
+    pow(
+        flow,
+        12.0
+    );
 
     float revealMask =
 
@@ -335,34 +342,24 @@ uv +=
         vec3(0.0);
 
     color +=
-        vec3(
-            0.4,
-            0.0,
-            0.0
-        ) * flow;
+vec3(
+    0.12,
+    0.0,
+    0.0
+) * flow;
 
     color +=
-        vec3(
-            1.8,
-            0.04,
-            0.04
-        ) *
-        pow(
-            flow,
-            2.0
-        );
+vec3(
+    0.4,
+    0.02,
+    0.02
+)
+*
+pow(
+    flow,
+    1.5
+);
 
-color +=
-    vec3(
-        0.5,
-        0.02,
-        0.02
-    )
-    *
-    pow(
-        flow,
-        0.7
-    );
     float crest =
 
         smoothstep(
