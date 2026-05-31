@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ink Fluid Background</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Wispy Ink Fluid</title>
 
 <style>
 html,body{
     margin:0;
-    width:100%;
     height:100%;
     overflow:hidden;
     background:#000;
@@ -19,88 +18,52 @@ canvas{
 }
 </style>
 </head>
+
 <body>
 
 <script type="module">
 
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+
+/* -------------------------
+   SETUP
+------------------------- */
 
 const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 
-const camera =
-new THREE.OrthographicCamera(
-    -1,1,
-     1,-1,
-     0.1,10
-);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
 
-camera.position.z = 1;
-
-const renderer =
-new THREE.WebGLRenderer({
-    antialias:true
-});
-
-renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-);
-
-renderer.setPixelRatio(
-    window.devicePixelRatio
-);
-
-document.body.appendChild(
-    renderer.domElement
-);
+/* -------------------------
+   UNIFORMS
+------------------------- */
 
 const uniforms = {
-
-    uTime:{
-        value:0
-    },
-
-    uMouse:{
-        value:new THREE.Vector2(
-            0.5,
-            0.5
-        )
-    },
-
-    uVelocity:{
-        value:new THREE.Vector2(
-            0,
-            0
-        )
-    }
-
+    uTime: { value: 0 },
+    uMouse: { value: new THREE.Vector2(0.5,0.5) },
+    uVelocity: { value: new THREE.Vector2(0,0) }
 };
 
-const material =
-new THREE.ShaderMaterial({
+/* -------------------------
+   SHADER
+------------------------- */
+
+const material = new THREE.ShaderMaterial({
 
 uniforms,
 
-vertexShader:`
-
+vertexShader: `
 varying vec2 vUv;
-
 void main(){
-
     vUv = uv;
-
-    gl_Position =
-        vec4(
-            position,
-            1.0
-        );
-
+    gl_Position = vec4(position,1.0);
 }
-
 `,
 
-fragmentShader:`
-
+fragmentShader: `
 precision highp float;
 
 uniform float uTime;
@@ -109,291 +72,155 @@ uniform vec2 uVelocity;
 
 varying vec2 vUv;
 
+/* -------------------------
+   NOISE
+------------------------- */
+
 float hash(vec2 p){
-
-    return fract(
-        sin(
-            dot(
-                p,
-                vec2(
-                    127.1,
-                    311.7
-                )
-            )
-        )*43758.5453123
-    );
-
+    return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453);
 }
 
 float noise(vec2 p){
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f*f*(3.0-2.0*f);
 
-    vec2 i=floor(p);
-    vec2 f=fract(p);
+    float a = hash(i);
+    float b = hash(i+vec2(1.,0.));
+    float c = hash(i+vec2(0.,1.));
+    float d = hash(i+vec2(1.,1.));
 
-    float a=hash(i);
-    float b=hash(i+vec2(1.,0.));
-    float c=hash(i+vec2(0.,1.));
-    float d=hash(i+vec2(1.,1.));
-
-    vec2 u=
-        f*f*(3.-2.*f);
-
-    return
-        mix(a,b,u.x)
-        +
-        (c-a)*u.y*(1.-u.x)
-        +
-        (d-b)*u.x*u.y;
-
+    return mix(a,b,u.x) +
+           (c-a)*u.y*(1.0-u.x) +
+           (d-b)*u.x*u.y;
 }
 
-/* curl vector field */
+/* curl field */
 vec2 curl(vec2 p){
-    float e = 0.0005;
+    float e = 0.001;
 
-    float n1 = noise(p + vec2(0, e));
-    float n2 = noise(p - vec2(0, e));
-    float a = (n1 - n2) / (2.0 * e);
+    float n1 = noise(p + vec2(0,e));
+    float n2 = noise(p - vec2(0,e));
+    float a = (n1 - n2);
 
-    float n3 = noise(p + vec2(e, 0));
-    float n4 = noise(p - vec2(e, 0));
-    float b = (n3 - n4) / (2.0 * e);
+    float n3 = noise(p + vec2(e,0));
+    float n4 = noise(p - vec2(e,0));
+    float b = (n3 - n4);
 
-    return normalize(vec2(a, -b));
+    return normalize(vec2(a,-b));
 }
 
-float fbm(vec2 p){
-
-    float v=0.0;
-    float a=0.5;
-
-    for(int i=0;i<7;i++){
-
-        v+=a*noise(p);
-
-        p*=2.0;
-
-        a*=0.5;
-    }
-
-    return v;
-
-}
+/* -------------------------
+   MAIN
+------------------------- */
 
 void main(){
 
     vec2 uv = vUv;
+    float t = uTime * 0.22;
 
-    float t =
-        uTime * 0.2;
+    vec2 p = uv * 3.6;
 
-    vec2 p =
-        uv * 0.22;
+    /* smooth flow */
+    vec2 flow = curl(p + t);
+    p += flow * 0.55;
 
-    vec2 warp = vec2(
+    /* mouse force */
+    vec2 d = uv - uMouse;
+    float dist = length(d);
 
-        fbm(
-            p*2.0 +
-            vec2(
-                t,
-                0.0
-            )
-        ),
+    vec2 push = normalize(d + 0.0001) * exp(-dist * 10.0);
+    p += push * (0.9 + length(uVelocity));
 
-        fbm(
-            p*2.0 -
-            vec2(
-                t,
-                0.0
-            )
-        )
+    /* secondary drift */
+    p += curl(p * 1.4 - t) * 0.18;
 
-    );
+    /* ink density */
+    float ink = noise(p + flow * 2.0);
+    ink += 0.4 * noise(p * 2.2 - t);
 
-    p +=
-        warp * 1.6;
+    ink = smoothstep(0.35, 0.78, ink);
+    ink = pow(ink, 0.85);
 
-    vec2 away =
-        uv - uMouse;
+    float vignette = smoothstep(1.2, 0.25, length(uv - 0.5));
 
-    float dist =
-        length(
-            away
-        );
+    /* -------------------------
+       COLOR (GREY FADE SYSTEM)
+    ------------------------- */
 
-    p +=
+    vec3 col = vec3(0.0);
 
-        normalize(
-            away +
-            0.0001
-        )
+/* --- 1. core red ink (soft) --- */
+col += vec3(0.22, 0.02, 0.02) * ink;
 
-        *
+/* --- 2. mid haze layer (IMPORTANT GREY TRANSITION) --- */
+float haze = smoothstep(0.2, 0.9, ink);
+col += vec3(0.18, 0.18, 0.18) * haze * 0.35;
 
-        exp(
-            -dist * 10.0
-        )
+/* --- 3. subtle red depth --- */
+col += vec3(0.45, 0.03, 0.03) * pow(ink, 2.0);
 
-        *
+/* --- 4. soften into black instead of hard cutoff --- */
+float fade = smoothstep(0.0, 0.9, ink);
+col *= fade;
 
-        length(
-            uVelocity
-        )
+/* --- 5. cinematic vignette --- */
+col *= vignette;
 
-        *
+/* --- 6. overall softness --- */
+col *= 0.95;
 
-        0.15;
+/* gentle lift so blacks aren't crushed */
+col += vec3(0.02);
 
-    float field =
-
-        fbm(
-            p +
-            vec2(
-                t*0.3,
-                t*0.15
-            )
-        );
-
-    field +=
-
-        0.5 *
-
-        fbm(
-            p*1.7 -
-            t*0.2
-        );
-
-    field *= 0.65;
-
-    float density =
-
-        smoothstep(
-            0.45,
-            0.78,
-            field
-        );
-
-    vec3 color =
-        vec3(0.0);
-
-    color +=
-
-        vec3(
-            0.03,
-            0.0,
-            0.0
-        )
-
-        *
-
-        density;
-
-    color +=
-
-        vec3(
-            0.12,
-            0.01,
-            0.01
-        )
-
-        *
-
-        pow(
-            density,
-            2.0
-        );
-
-    color *= 0.8;
-
-    gl_FragColor =
-        vec4(
-            color,
-            1.0
-        );
-
+    gl_FragColor = vec4(col,1.0);
 }
-
-`
+`,
 
 });
 
-scene.add(
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), material));
 
-    new THREE.Mesh(
-        new THREE.PlaneGeometry(
-            2,
-            2
-        ),
-        material
-    )
+/* -------------------------
+   MOUSE
+------------------------- */
 
-);
+let target = new THREE.Vector2(0.5,0.5);
+let prev = new THREE.Vector2(0.5,0.5);
 
-let target =
-new THREE.Vector2(
-    0.5,
-    0.5
-);
+window.addEventListener("mousemove", (e)=>{
 
-let previous =
-new THREE.Vector2(
-    0.5,
-    0.5
-);
+    let mx = e.clientX / window.innerWidth;
+    let my = 1 - e.clientY / window.innerHeight;
 
-window.addEventListener(
-    "mousemove",
-    e=>{
+    uniforms.uVelocity.value.x = (mx - prev.x) * 5.0;
+    uniforms.uVelocity.value.y = (my - prev.y) * 5.0;
 
-        const mx =
-            e.clientX /
-            window.innerWidth;
+    prev.set(mx,my);
+    target.set(mx,my);
+});
 
-        const my =
-            1 -
-            e.clientY /
-            window.innerHeight;
+/* -------------------------
+   RESIZE
+------------------------- */
 
-        uniforms.uVelocity.value.x = (mx - previous.x) * 5.0;
-    uniforms.uVelocity.value.y = (my - previous.y) * 5.0;
-        );
+window.addEventListener("resize", ()=>{
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
 
-        previous.set(
-            mx,
-            my
-        );
-
-        target.set(
-            mx,
-            my
-        );
-
-    }
-);
-
-window.addEventListener(
-    "resize",
-    ()=>{
-
-        renderer.setSize(
-            window.innerWidth,
-            window.innerHeight
-        );
-
-    }
-);
+/* -------------------------
+   LOOP
+------------------------- */
 
 function animate(){
-
-  requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
 
     uniforms.uTime.value += 0.016;
 
     uniforms.uMouse.value.lerp(target, 0.08);
-
     uniforms.uVelocity.value.multiplyScalar(0.92);
 
-    renderer.render(scene, camera);
+    renderer.render(scene,camera);
 }
 
 animate();
