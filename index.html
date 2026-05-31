@@ -147,6 +147,21 @@ float noise(vec2 p){
 
 }
 
+/* curl vector field */
+vec2 curl(vec2 p){
+    float e = 0.0005;
+
+    float n1 = noise(p + vec2(0, e));
+    float n2 = noise(p - vec2(0, e));
+    float a = (n1 - n2) / (2.0 * e);
+
+    float n3 = noise(p + vec2(e, 0));
+    float n4 = noise(p - vec2(e, 0));
+    float b = (n3 - n4) / (2.0 * e);
+
+    return normalize(vec2(a, -b));
+}
+
 float fbm(vec2 p){
 
     float v=0.0;
@@ -170,7 +185,7 @@ void main(){
     vec2 uv = vUv;
 
     float t =
-        uTime * 0.03;
+        uTime * 0.2;
 
     vec2 p =
         uv * 0.22;
@@ -339,12 +354,8 @@ window.addEventListener(
             e.clientY /
             window.innerHeight;
 
-        uniforms.uVelocity.value.set(
-            mx -
-            previous.x,
-
-            my -
-            previous.y
+        uniforms.uVelocity.value.x = (mx - previous.x) * 5.0;
+    uniforms.uVelocity.value.y = (my - previous.y) * 5.0;
         );
 
         previous.set(
@@ -374,26 +385,15 @@ window.addEventListener(
 
 function animate(){
 
-    requestAnimationFrame(
-        animate
-    );
+  requestAnimationFrame(animate);
 
-    uniforms.uTime.value += 0.01;
+    uniforms.uTime.value += 0.016;
 
-    uniforms.uMouse.value.lerp(
-        target,
-        0.05
-    );
+    uniforms.uMouse.value.lerp(target, 0.08);
 
-    uniforms.uVelocity.value.multiplyScalar(
-        0.95
-    );
+    uniforms.uVelocity.value.multiplyScalar(0.92);
 
-    renderer.render(
-        scene,
-        camera
-    );
-
+    renderer.render(scene, camera);
 }
 
 animate();
