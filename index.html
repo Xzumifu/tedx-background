@@ -3,24 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>TEDx Fluid Energy</title>
+<title>Ink Fluid Background</title>
 
 <style>
-html, body {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #000;
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
 }
 
-canvas {
-    display: block;
+canvas{
+    display:block;
 }
 </style>
 </head>
-
 <body>
 
 <script type="module">
@@ -29,19 +27,18 @@ import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
 const scene = new THREE.Scene();
 
-const camera = new THREE.OrthographicCamera(
-    -1,
-    1,
-    1,
-    -1,
-    0.1,
-    10
+const camera =
+new THREE.OrthographicCamera(
+    -1,1,
+     1,-1,
+     0.1,10
 );
 
 camera.position.z = 1;
 
-const renderer = new THREE.WebGLRenderer({
-    antialias: true
+const renderer =
+new THREE.WebGLRenderer({
+    antialias:true
 });
 
 renderer.setSize(
@@ -50,7 +47,7 @@ renderer.setSize(
 );
 
 renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio, 2)
+    window.devicePixelRatio
 );
 
 document.body.appendChild(
@@ -59,44 +56,23 @@ document.body.appendChild(
 
 const uniforms = {
 
-    uTime: {
-        value: 0
+    uTime:{
+        value:0
     },
 
-    uMouse: {
-        value: new THREE.Vector2(
+    uMouse:{
+        value:new THREE.Vector2(
             0.5,
             0.5
         )
     },
 
-    uTrail1: {
-        value: new THREE.Vector2(
-            0.5,
-            0.5
+    uVelocity:{
+        value:new THREE.Vector2(
+            0,
+            0
         )
-    },
-
-    uTrail2: {
-        value: new THREE.Vector2(
-            0.5,
-            0.5
-        )
-    },
-
-uTrail3: {
-    value: new THREE.Vector2(
-        0.5,
-        0.5
-    )
-},
-
-uVelocity: {
-    value: new THREE.Vector2(
-        0,
-        0
-    )
-}
+    }
 
 };
 
@@ -105,7 +81,7 @@ new THREE.ShaderMaterial({
 
 uniforms,
 
-vertexShader: `
+vertexShader:`
 
 varying vec2 vUv;
 
@@ -123,16 +99,12 @@ void main(){
 
 `,
 
-fragmentShader: `
+fragmentShader:`
 
 precision highp float;
 
 uniform float uTime;
-
 uniform vec2 uMouse;
-uniform vec2 uTrail1;
-uniform vec2 uTrail2;
-uniform vec2 uTrail3;
 uniform vec2 uVelocity;
 
 varying vec2 vUv;
@@ -148,234 +120,175 @@ float hash(vec2 p){
                     311.7
                 )
             )
-        ) * 43758.5453123
+        )*43758.5453123
     );
 
 }
 
 float noise(vec2 p){
 
-    vec2 i = floor(p);
-    vec2 f = fract(p);
+    vec2 i=floor(p);
+    vec2 f=fract(p);
 
-    float a = hash(i);
-    float b = hash(i + vec2(1.0,0.0));
-    float c = hash(i + vec2(0.0,1.0));
-    float d = hash(i + vec2(1.0,1.0));
+    float a=hash(i);
+    float b=hash(i+vec2(1.,0.));
+    float c=hash(i+vec2(0.,1.));
+    float d=hash(i+vec2(1.,1.));
 
-    vec2 u =
-        f*f*(3.0-2.0*f);
+    vec2 u=
+        f*f*(3.-2.*f);
 
-    return mix(a,b,u.x)
-        +(c-a)*u.y*(1.0-u.x)
-        +(d-b)*u.x*u.y;
+    return
+        mix(a,b,u.x)
+        +
+        (c-a)*u.y*(1.-u.x)
+        +
+        (d-b)*u.x*u.y;
 
 }
 
 float fbm(vec2 p){
 
-    float v = 0.0;
-    float a = 0.5;
+    float v=0.0;
+    float a=0.5;
 
-    for(int i=0;i<6;i++){
+    for(int i=0;i<7;i++){
 
-        v += a*noise(p);
+        v+=a*noise(p);
 
-        p *= 2.0;
+        p*=2.0;
 
-        a *= 0.5;
-
+        a*=0.5;
     }
 
     return v;
 
 }
 
-float reveal(
-    vec2 uv,
-    vec2 point,
-    float radius
-){
-
-    float d =
-        distance(
-            uv,
-            point
-        );
-
-    return exp(
-        -d * radius
-    );
-
-}
-
 void main(){
 
     vec2 uv = vUv;
-    vec2 pull =
-    uMouse - uv;
-
-float d =
-    length(
-        pull
-    );
-
-vec2 vortex =
-    vec2(
-        -pull.y,
-         pull.x
-    );
-
-uv +=
-    pull
-    *
-    exp(-d * 8.0)
-    *
-    0.025;
-
-uv +=
-    vortex /
-(max(length(vortex),0.001))
-    *
-    exp(
-        -d * 8.0
-    )
-    *
-    length(
-        uVelocity
-    )
-    *
-    0.15;
 
     float t =
-        uTime * 0.18;
+        uTime * 0.03;
 
     vec2 p =
-        uv * 0.45;
+        uv * 0.22;
 
-    p.x +=
-        sin(
-            p.y * 2.5
-            + t * 2.0
-        ) * 0.9;
-
-    p.y +=
-        cos(
-            p.x * 2.5
-            - t * 2.0
-        ) * 0.9;
-
-    p += vec2(
-        sin(t + p.y),
-        cos(t + p.x)
-    ) * 0.35;
-
-    float field =
-    fbm(p+t);
-
-float flow =
-    abs(
-        sin(
-            field * 18.0
-        )
-    );
-
-flow =
-    pow(
-        flow,
-        12.0
-    );
-
-    float revealMask =
-
-        reveal(
-            uv,
-            uMouse,
-            9.0
-        )
-
-        +
-
-        reveal(
-            uv,
-            uTrail1,
-            6.0
-        ) * 0.8
-
-        +
-
-        reveal(
-            uv,
-            uTrail2,
-            4.5
-        ) * 0.6
-
-        +
-
-        reveal(
-            uv,
-            uTrail3,
-            3.0
-        ) * 0.4;
-
-    float distortion =
+    vec2 warp = vec2(
 
         fbm(
-            uv * 8.0
-            + t * 2.0
+            p*2.0 +
+            vec2(
+                t,
+                0.0
+            )
+        ),
+
+        fbm(
+            p*2.0 -
+            vec2(
+                t,
+                0.0
+            )
+        )
+
+    );
+
+    p +=
+        warp * 1.6;
+
+    vec2 away =
+        uv - uMouse;
+
+    float dist =
+        length(
+            away
         );
 
-    revealMask *=
-        0.5 +
-        distortion;
+    p +=
 
-    flow *= revealMask;
+        normalize(
+            away +
+            0.0001
+        )
 
-    flow =
+        *
+
+        exp(
+            -dist * 10.0
+        )
+
+        *
+
+        length(
+            uVelocity
+        )
+
+        *
+
+        0.15;
+
+    float field =
+
+        fbm(
+            p +
+            vec2(
+                t*0.3,
+                t*0.15
+            )
+        );
+
+    field +=
+
+        0.5 *
+
+        fbm(
+            p*1.7 -
+            t*0.2
+        );
+
+    field *= 0.65;
+
+    float density =
+
         smoothstep(
-            0.15,
-            0.85,
-            flow
+            0.45,
+            0.78,
+            field
         );
 
     vec3 color =
         vec3(0.0);
 
     color +=
-vec3(
-    0.12,
-    0.0,
-    0.0
-) * flow;
+
+        vec3(
+            0.03,
+            0.0,
+            0.0
+        )
+
+        *
+
+        density;
 
     color +=
-vec3(
-    0.4,
-    0.02,
-    0.02
-)
-*
-pow(
-    flow,
-    1.5
-);
 
-    float crest =
+        vec3(
+            0.12,
+            0.01,
+            0.01
+        )
 
-        smoothstep(
-            0.65,
-            0.9,
-            flow
+        *
+
+        pow(
+            density,
+            2.0
         );
 
-    color +=
-        vec3(
-            3.0,
-            0.15,
-            0.15
-        ) *
-        crest *
-        0.5;
+    color *= 0.8;
 
     gl_FragColor =
         vec4(
@@ -389,16 +302,17 @@ pow(
 
 });
 
-const plane =
-new THREE.Mesh(
-    new THREE.PlaneGeometry(
-        2,
-        2
-    ),
-    material
-);
+scene.add(
 
-scene.add(plane);
+    new THREE.Mesh(
+        new THREE.PlaneGeometry(
+            2,
+            2
+        ),
+        material
+    )
+
+);
 
 let target =
 new THREE.Vector2(
@@ -406,7 +320,7 @@ new THREE.Vector2(
     0.5
 );
 
-let previousMouse =
+let previous =
 new THREE.Vector2(
     0.5,
     0.5
@@ -414,7 +328,7 @@ new THREE.Vector2(
 
 window.addEventListener(
     "mousemove",
-    e => {
+    e=>{
 
         const mx =
             e.clientX /
@@ -425,20 +339,20 @@ window.addEventListener(
             e.clientY /
             window.innerHeight;
 
-        target.set(
+        uniforms.uVelocity.value.set(
+            mx -
+            previous.x,
+
+            my -
+            previous.y
+        );
+
+        previous.set(
             mx,
             my
         );
 
-        uniforms.uVelocity.value.set(
-            mx -
-            previousMouse.x,
-
-            my -
-            previousMouse.y
-        );
-
-        previousMouse.set(
+        target.set(
             mx,
             my
         );
@@ -448,7 +362,7 @@ window.addEventListener(
 
 window.addEventListener(
     "resize",
-    () => {
+    ()=>{
 
         renderer.setSize(
             window.innerWidth,
@@ -466,24 +380,13 @@ function animate(){
 
     uniforms.uTime.value += 0.01;
 
-    uniforms.uTrail3.value.lerp(
-        uniforms.uTrail2.value,
-        0.03
-    );
-
-    uniforms.uTrail2.value.lerp(
-        uniforms.uTrail1.value,
-        0.04
-    );
-
-    uniforms.uTrail1.value.lerp(
-        uniforms.uMouse.value,
-        0.06
-    );
-
     uniforms.uMouse.value.lerp(
         target,
-        0.09
+        0.05
+    );
+
+    uniforms.uVelocity.value.multiplyScalar(
+        0.95
     );
 
     renderer.render(
