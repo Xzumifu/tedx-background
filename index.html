@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Physical Fluid Simulation</title>
+<title>Clean Fluid Ink (Fixed Artifacts)</title>
 
 <style>
 html,body{
-    margin:0;
-    height:100%;
-    overflow:hidden;
-    background:#000;
+  margin:0;
+  height:100%;
+  overflow:hidden;
+  background:#000;
 }
 canvas{ display:block; }
 </style>
@@ -22,9 +22,7 @@ canvas{ display:block; }
 
 import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
-/* =========================
-   SETUP
-========================= */
+/* ---------------- SETUP ---------------- */
 
 const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -34,9 +32,7 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
 
-/* =========================
-   DOUBLE BUFFER
-========================= */
+/* ---------------- BUFFERS ---------------- */
 
 const rtA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
 const rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
@@ -44,20 +40,16 @@ const rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
 let prev = rtA;
 let curr = rtB;
 
-/* =========================
-   UNIFORMS
-========================= */
+/* ---------------- UNIFORMS ---------------- */
 
 const U = {
-    uTime: { value: 0 },
-    uMouse: { value: new THREE.Vector2(0.5,0.5) },
-    uVel: { value: new THREE.Vector2(0,0) },
-    uPrev: { value: null }
+  uTime: { value: 0 },
+  uMouse: { value: new THREE.Vector2(0.5,0.5) },
+  uVel: { value: new THREE.Vector2(0,0) },
+  uPrev: { value: null }
 };
 
-/* =========================
-   PHYSICAL FLUID SHADER
-========================= */
+/* ---------------- SHADER ---------------- */
 
 const mat = new THREE.ShaderMaterial({
 
@@ -66,8 +58,8 @@ uniforms: U,
 vertexShader: `
 varying vec2 vUv;
 void main(){
-    vUv = uv;
-    gl_Position = vec4(position,1.0);
+  vUv = uv;
+  gl_Position = vec4(position,1.0);
 }
 `,
 
@@ -81,202 +73,142 @@ uniform sampler2D uPrev;
 
 varying vec2 vUv;
 
-/* =========================
-   NOISE (FOR SMALL PERTURBATIONS ONLY)
-========================= */
+/* ---------------- CURL ONLY (NO RADIAL ARTIFACTS POSSIBLE) ---------------- */
 
 float hash(vec2 p){
-    return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453);
+  return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453);
 }
 
-/* =========================
-   CURL FIELD (VELOCITY BASE)
-========================= */
-
 float noise(vec2 p){
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f*f*(3.0-2.0*f);
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f*f*(3.0-2.0*f);
 
-    float a = hash(i);
-    float b = hash(i+vec2(1.,0.));
-    float c = hash(i+vec2(0.,1.));
-    float d = hash(i+vec2(1.,1.));
+  float a = hash(i);
+  float b = hash(i+vec2(1.,0.));
+  float c = hash(i+vec2(0.,1.));
+  float d = hash(i+vec2(1.,1.));
 
-    return mix(a,b,u.x) +
-           (c-a)*u.y*(1.0-u.x) +
-           (d-b)*u.x*u.y;
+  return mix(a,b,u.x) +
+         (c-a)*u.y*(1.0-u.x) +
+         (d-b)*u.x*u.y;
 }
 
 vec2 curl(vec2 p){
-    float e = 0.0015;
+  float e = 0.0015;
 
-    float n1 = noise(p + vec2(0,e));
-    float n2 = noise(p - vec2(0,e));
-    float a = n1 - n2;
+  float n1 = noise(p + vec2(0,e));
+  float n2 = noise(p - vec2(0,e));
+  float a = n1 - n2;
 
-    float n3 = noise(p + vec2(e,0));
-    float n4 = noise(p - vec2(e,0));
-    float b = n3 - n4;
+  float n3 = noise(p + vec2(e,0));
+  float n4 = noise(p - vec2(e,0));
+  float b = n3 - n4;
 
-    return vec2(a,-b);
+  return vec2(a,-b);
 }
 
-/* =========================
-   MAIN
-========================= */
+/* ---------------- MAIN ---------------- */
 
 void main(){
 
-    vec2 uv = vUv;
-    float t = uTime * 0.06;
+  vec2 uv = vUv;
+  float t = uTime * 0.06;
 
-    vec3 prevCol = texture2D(uPrev, uv).rgb;
+  vec3 prevCol = texture2D(uPrev, uv).rgb;
 
-    /* =========================
-       VELOCITY FIELD (REAL FLUID CORE)
-    ========================= */
+  /* ---------------- PURE CURL FLOW ---------------- */
 
-    vec2 p = uv * 2.0;
+  vec2 flow = curl(uv * 2.0 + t);
 
-    vec2 velField =
-        curl(p + t) * 1.2 +
-        curl(p * 2.0 - t) * 0.4;
+  /* tiny drift ONLY (breaks symmetry safely) */
+  flow += vec2(0.02, -0.01);
 
-    /* weak global drift prevents symmetry collapse */
-    velField += vec2(0.04, -0.015);
+  /* advection (NO radial forces anywhere) */
+  vec2 advUV = uv - flow * 0.35;
 
-    /* =========================
-       ADVECTION STEP (CRITICAL)
-    ========================= */
+  /* ---------------- DYE TRANSPORT (KEY FIX) ---------------- */
 
-    vec2 advectPos = uv - velField * 0.35;
+  float dye = texture2D(uPrev, advUV).r;
 
-    /* =========================
-       MOUSE FORCE (NOT ATTRACTION)
-    ========================= */
+  /* NO re-injection noise explosion */
+  dye = dye;
 
-    vec2 d = uv - uMouse;
-    float dist = length(d);
-    vec2 dir = normalize(d + 0.0001);
+  /* mild diffusion only */
+  dye = mix(dye, texture2D(uPrev, uv).r, 0.96);
 
-    float falloff = exp(-dist * 7.0);
+  /* keep structure */
+  dye = pow(dye, 1.05);
 
-    vec2 tangent = vec2(-d.y, d.x);
+  /* ---------------- COLOR (NO GREY BLOB GENERATION) ---------------- */
 
-    /* pressure + swirl injection */
-    velField += dir * falloff * 0.6;
-    velField += tangent * falloff * 0.4;
+  vec3 col = vec3(0.0);
 
-    velField += uVel * falloff * 0.15;
+/* thin ink */
+col += vec3(0.12,0.10,0.10) * dye * 0.8;
 
-    /* =========================
-       DYE (ADVECTION BASED, NOT NOISE DRIVEN)
-    ========================= */
+/* controlled red */
+col += vec3(0.55,0.05,0.05) * pow(dye,1.6);
 
-    float dye = texture2D(uPrev, advectPos).r;
+/* IMPORTANT: no center haze term */
 
-    /* controlled injection near cursor */
-    dye += falloff * 0.3;
+/* ---------------- FEEDBACK ---------------- */
 
-    /* very light diffusion */
-    dye = mix(dye, texture2D(uPrev, uv + velField * 0.02).r, 0.92);
+col = prevCol * 0.92 + col * 0.08;
 
-    dye = smoothstep(0.35, 0.85, dye);
-    dye = pow(dye, 0.95);
+/* subtle lift */
+col += 0.008;
 
-    /* breakup */
-    dye *= mix(0.75, 1.1, noise(p * 3.0 + t));
+/* NO vignette (this caused center blob bias) */
 
-    /* =========================
-       COLOR RENDERING
-    ========================= */
-
-    vec3 col = prevCol * 0.92;
-
-    /* wispy ink */
-    col += vec3(0.10) * dye * 0.6;
-
-    /* controlled red core */
-    col += vec3(0.55,0.05,0.05) * pow(dye,1.6);
-
-    /* atmospheric grey */
-    col += vec3(0.12) * smoothstep(0.2,0.8,dye) * 0.15;
-
-    /* =========================
-       STABILITY FIXES
-    ========================= */
-
-    float vignette = smoothstep(1.3, 0.2, length(uv - 0.5));
-    col *= vignette;
-
-    col += 0.01;
-
-    gl_FragColor = vec4(col,1.0);
+gl_FragColor = vec4(col,1.0);
 }
 `
 });
 
-/* =========================
-   SCENE
-========================= */
+/* ---------------- SCENE ---------------- */
 
 scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2), mat));
 
-/* =========================
-   MOUSE
-========================= */
+/* ---------------- MOUSE ---------------- */
 
 let prevM = new THREE.Vector2();
 let target = new THREE.Vector2();
 
 window.addEventListener("mousemove",(e)=>{
 
-    let mx = e.clientX / window.innerWidth;
-    let my = 1 - e.clientY / window.innerHeight;
+  let mx = e.clientX / window.innerWidth;
+  let my = 1 - e.clientY / window.innerHeight;
 
-    U.uVel.value.x = (mx - prevM.x) * 4.0;
-    U.uVel.value.y = (my - prevM.y) * 4.0;
+  U.uVel.value.x = (mx - prevM.x) * 3.5;
+  U.uVel.value.y = (my - prevM.y) * 3.5;
 
-    prevM.set(mx,my);
-    target.set(mx,my);
+  prevM.set(mx,my);
+  target.set(mx,my);
 });
 
-/* =========================
-   RESIZE
-========================= */
-
-window.addEventListener("resize",()=>{
-
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    rtA.setSize(window.innerWidth, window.innerHeight);
-    rtB.setSize(window.innerWidth, window.innerHeight);
-});
-
-/* =========================
-   LOOP
-========================= */
+/* ---------------- LOOP ---------------- */
 
 function animate(){
 
-    requestAnimationFrame(animate);
+  requestAnimationFrame(animate);
 
-    U.uTime.value += 0.016;
+  U.uTime.value += 0.016;
 
-    U.uMouse.value.lerp(target, 0.05);
-    U.uVel.value.multiplyScalar(0.92);
+  U.uMouse.value.lerp(target, 0.08);
+  U.uVel.value.multiplyScalar(0.92);
 
-    U.uPrev.value = prev.texture;
+  U.uPrev.value = prev.texture;
 
-    renderer.setRenderTarget(curr);
-    renderer.render(scene,camera);
+  renderer.setRenderTarget(curr);
+  renderer.render(scene,camera);
 
-    renderer.setRenderTarget(null);
-    renderer.render(scene,camera);
+  renderer.setRenderTarget(null);
+  renderer.render(scene,camera);
 
-    let tmp = prev;
-    prev = curr;
-    curr = tmp;
+  let tmp = prev;
+  prev = curr;
+  curr = tmp;
 }
 
 animate();
