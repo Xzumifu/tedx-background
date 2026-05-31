@@ -84,12 +84,19 @@ const uniforms = {
         )
     },
 
-    uTrail3: {
-        value: new THREE.Vector2(
-            0.5,
-            0.5
-        )
-    }
+uTrail3: {
+    value: new THREE.Vector2(
+        0.5,
+        0.5
+    )
+},
+
+uVelocity: {
+    value: new THREE.Vector2(
+        0,
+        0
+    )
+}
 
 };
 
@@ -126,6 +133,7 @@ uniform vec2 uMouse;
 uniform vec2 uTrail1;
 uniform vec2 uTrail2;
 uniform vec2 uTrail3;
+uniform vec2 uVelocity;
 
 varying vec2 vUv;
 
@@ -204,12 +212,48 @@ float reveal(
 void main(){
 
     vec2 uv = vUv;
+    vec2 pull =
+    uMouse - uv;
+
+float d =
+    length(
+        pull
+    );
+
+vec2 vortex =
+    vec2(
+        -pull.y,
+         pull.x
+    );
+
+uv +=
+    pull
+    *
+    exp(
+        -d * 6.0
+    )
+    *
+    0.08;
+
+uv +=
+    vortex /
+(max(length(vortex),0.001))
+    *
+    exp(
+        -d * 8.0
+    )
+    *
+    length(
+        uVelocity
+    )
+    *
+    0.6;
 
     float t =
         uTime * 0.18;
 
     vec2 p =
-        uv * 3.5;
+        uv * 1.8;
 
     p.x +=
         sin(
@@ -308,6 +352,17 @@ void main(){
             2.0
         );
 
+color +=
+    vec3(
+        0.5,
+        0.02,
+        0.02
+    )
+    *
+    pow(
+        flow,
+        0.7
+    );
     float crest =
 
         smoothstep(
@@ -354,17 +409,41 @@ new THREE.Vector2(
     0.5
 );
 
+let previousMouse =
+new THREE.Vector2(
+    0.5,
+    0.5
+);
+
 window.addEventListener(
     "mousemove",
     e => {
 
-        target.set(
+        const mx =
             e.clientX /
-            window.innerWidth,
+            window.innerWidth;
 
+        const my =
             1 -
             e.clientY /
-            window.innerHeight
+            window.innerHeight;
+
+        target.set(
+            mx,
+            my
+        );
+
+        uniforms.uVelocity.value.set(
+            mx -
+            previousMouse.x,
+
+            my -
+            previousMouse.y
+        );
+
+        previousMouse.set(
+            mx,
+            my
         );
 
     }
