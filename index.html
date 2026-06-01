@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Glowing Thread</title>
+<title>Untold Narratives Thread</title>
 
 <style>
 html, body {
@@ -15,9 +15,9 @@ html, body {
 }
 
 canvas {
+    display: block;
     width: 100%;
     height: 100%;
-    display: block;
 }
 </style>
 </head>
@@ -26,6 +26,7 @@ canvas {
 <canvas id="canvas"></canvas>
 
 <script>
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
@@ -37,115 +38,230 @@ resize();
 window.addEventListener("resize", resize);
 
 let time = 0;
+
 const particles = [];
 
-class Particle {
-    constructor(x,y,direction){
+/* -------------------------
+   Random Burst Timer
+------------------------- */
 
-    this.x = x;
-    this.y = y;
+let nextBurst =
+    performance.now() +
+    (10000 + Math.random() * 20000);
 
-    this.direction = direction;
+/* -------------------------
+   Thread Shape
+------------------------- */
 
-    this.vx =
-        (Math.random()-0.5)*0.1;
+function threadY(x) {
 
-    this.vy =
-        direction *
-        (0.08 + Math.random()*0.12);
+    const centerY = canvas.height * 0.5;
 
-    this.life = 1;
-
-    this.decay =
-        0.001 +
-        Math.random()*0.001;
-
-    this.size =
-        0.8 +
-        Math.random()*1.5;
+    return centerY
+        + Math.sin(x * 0.015 + time * 1.2) * 2
+        + Math.sin(x * 0.004 + time * 0.5) * 4
+        + Math.sin(x * 0.03 + time * 1.8) * 0.75;
 }
 
+/* -------------------------
+   Particle
+------------------------- */
+
+class Particle {
+
+    constructor(x, y, direction) {
+
+        this.x = x;
+        this.y = y;
+
+        this.vx =
+            (Math.random() - 0.5) * 0.08;
+
+        this.vy =
+            direction *
+            (0.05 + Math.random() * 0.08);
+
+        this.life = 1;
+
+        this.decay =
+            0.001 +
+            Math.random() * 0.0008;
+
+        this.size =
+            0.8 +
+            Math.random() * 1.2;
+    }
+
     update() {
+
         this.x += this.vx;
         this.y += this.vy;
 
-        this.vx *= 0.995;
+        this.vx *= 0.998;
+
         this.life -= this.decay;
     }
 
     draw() {
-        const alpha = Math.max(this.life, 0);
 
         ctx.save();
 
-        ctx.globalAlpha = alpha;
+        ctx.globalAlpha = this.life;
 
-        ctx.shadowColor = "#ff2222";
+        ctx.shadowColor = "#ff5522";
         ctx.shadowBlur = 6;
 
-        ctx.fillStyle = "#ff4444";
+        ctx.fillStyle = "#ff7744";
 
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.arc(
+            this.x,
+            this.y,
+            this.size,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
 
         ctx.restore();
     }
 }
 
-function threadY(x) {
-    const centerY = canvas.height * 0.5;
+/* -------------------------
+   Particle Burst
+------------------------- */
 
-    return centerY
-        + Math.sin(x * 0.015 + time * 1.2) * 4
-        + Math.sin(x * 0.004 + time * 0.5) * 8
-        + Math.sin(x * 0.03 + time * 1.8) * 1.5;
-}
+function createBurst() {
 
-function spawnParticles() {
+    const count =
+        3 + Math.floor(Math.random() * 3);
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < count; i++) {
 
-        if (Math.random() < 0.35) {
+        const x =
+            Math.random() * canvas.width;
 
-            const x = Math.random() * canvas.width;
-            const y = threadY(x);
+        const y =
+            threadY(x);
 
-            particles.push(new Particle(x, y));
-        }
+        const direction =
+            Math.random() < 0.5 ? -1 : 1;
+
+        particles.push(
+            new Particle(
+                x,
+                y,
+                direction
+            )
+        );
     }
 }
 
+/* -------------------------
+   Draw Thread
+------------------------- */
+
 function drawThread() {
+
+    const segments = 500;
+
+    /* Outer warm glow */
 
     ctx.save();
 
     ctx.beginPath();
 
-    const segments = 500;
-
     for (let i = 0; i <= segments; i++) {
 
-        const x = (i / segments) * canvas.width;
-        const y = threadY(x);
+        const x =
+            (i / segments) * canvas.width;
 
-        if (i === 0) {
+        const y =
+            threadY(x);
+
+        if (i === 0)
             ctx.moveTo(x, y);
-        } else {
+        else
             ctx.lineTo(x, y);
-        }
     }
 
-    ctx.shadowColor = "#ff0000";
-    ctx.shadowBlur = 15;
+    ctx.strokeStyle =
+        "rgba(255,120,40,0.35)";
 
-    ctx.strokeStyle = "#ff2a2a";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 4;
+
+    ctx.shadowColor =
+        "rgba(255,120,40,0.8)";
+
+    ctx.shadowBlur = 12;
 
     ctx.stroke();
 
     ctx.restore();
+
+    /* Mid glow */
+
+    ctx.save();
+
+    ctx.beginPath();
+
+    for (let i = 0; i <= segments; i++) {
+
+        const x =
+            (i / segments) * canvas.width;
+
+        const y =
+            threadY(x);
+
+        if (i === 0)
+            ctx.moveTo(x, y);
+        else
+            ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle =
+        "rgba(255,70,50,0.6)";
+
+    ctx.lineWidth = 2;
+
+    ctx.shadowColor =
+        "#ff5522";
+
+    ctx.shadowBlur = 6;
+
+    ctx.stroke();
+
+    ctx.restore();
+
+    /* Bright thread core */
+
+    ctx.beginPath();
+
+    for (let i = 0; i <= segments; i++) {
+
+        const x =
+            (i / segments) * canvas.width;
+
+        const y =
+            threadY(x);
+
+        if (i === 0)
+            ctx.moveTo(x, y);
+        else
+            ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle =
+        "#ff2a2a";
+
+    ctx.lineWidth = 0.8;
+
+    ctx.stroke();
 }
+
+/* -------------------------
+   Animation
+------------------------- */
 
 function animate() {
 
@@ -153,36 +269,35 @@ function animate() {
 
     time += 0.002;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const now =
+        performance.now();
+
+    if (now > nextBurst) {
+
+        createBurst();
+
+        nextBurst =
+            now +
+            (10000 + Math.random() * 20000);
+    }
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
 
     drawThread();
 
-    function createBurst() {
+    for (
+        let i = particles.length - 1;
+        i >= 0;
+        i--
+    ) {
 
-    const count = 3 + Math.floor(Math.random() * 3);
-
-    for(let i = 0; i < count; i++) {
-
-        const x = Math.random() * canvas.width;
-        const y = threadY(x);
-
-        particles.push(
-            new Particle(
-                x,
-                y,
-                Math.random() < 0.5 ? -1 : 1
-            )
-        );
-    }
-}
-
-    let nextBurst =
-    performance.now() +
-    (10000 + Math.random() * 20000);
-
-    for (let i = particles.length - 1; i >= 0; i--) {
-
-        const p = particles[i];
+        const p =
+            particles[i];
 
         p.update();
         p.draw();
@@ -195,16 +310,6 @@ function animate() {
 
 animate();
 
-    const now = performance.now();
-
-if(now > nextBurst){
-
-    createBurst();
-
-    nextBurst =
-        now +
-        (10000 + Math.random()*20000);
-}
 </script>
 
 </body>
