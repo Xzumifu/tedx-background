@@ -34,24 +34,28 @@ function resize(){
 }
 resize();
 
-window.addEventListener("resize",resize);
+window.addEventListener("resize", resize);
 
 let t = 0;
 
 const particles = [];
 
-/* THREAD */
+/* THREAD SHAPE */
 
 function threadY(x){
 
-    return canvas.height * 0.5
+    const center = canvas.height * 0.5;
 
-        + Math.sin(x * 0.004 + t) * 3
+    return center
 
-        + Math.sin(x * 0.01 + t * 0.6) * 1.5;
+        + Math.sin(x * 0.004 + t * 1.0) * 8
+
+        + Math.sin(x * 0.012 + t * 0.6) * 4
+
+        + Math.sin(x * 0.025 + t * 1.3) * 2;
 }
 
-/* PARTICLES */
+/* EMBERS */
 
 class Ember{
 
@@ -73,7 +77,7 @@ class Ember{
         this.life = 1;
 
         this.size =
-            1 + Math.random()*1.5;
+            0.8 + Math.random()*1.2;
     }
 
     update(){
@@ -90,10 +94,10 @@ class Ember{
 
         ctx.globalAlpha = this.life;
 
-        ctx.shadowColor = "#ff6622";
-        ctx.shadowBlur = 12;
+        ctx.shadowColor = "#ff6633";
+        ctx.shadowBlur = 8;
 
-        ctx.fillStyle = "#ff8844";
+        ctx.fillStyle = "#ff8855";
 
         ctx.beginPath();
         ctx.arc(
@@ -101,7 +105,7 @@ class Ember{
             this.y,
             this.size,
             0,
-            Math.PI*2
+            Math.PI * 2
         );
         ctx.fill();
 
@@ -109,7 +113,7 @@ class Ember{
     }
 }
 
-/* BURST SYSTEM */
+/* BURSTS */
 
 function createBurst(){
 
@@ -119,7 +123,7 @@ function createBurst(){
     for(let i=0;i<amount;i++){
 
         const x =
-            Math.random()*canvas.width;
+            Math.random() * canvas.width;
 
         particles.push(
             new Ember(
@@ -130,29 +134,26 @@ function createBurst(){
     }
 }
 
-/* TESTING */
-
-setInterval(()=>{
+setInterval(() => {
 
     createBurst();
 
-},5000);
+}, 5000);
 
 /* DRAW THREAD */
 
 function drawThread(){
 
-    const segments = 400;
+    const segments = 500;
 
-    /* BIG ORANGE GLOW */
+    /* SUBTLE ORANGE HALO */
 
     ctx.beginPath();
 
     for(let i=0;i<=segments;i++){
 
         const x =
-            canvas.width *
-            i/segments;
+            canvas.width * i / segments;
 
         const y =
             threadY(x);
@@ -164,26 +165,25 @@ function drawThread(){
     }
 
     ctx.strokeStyle =
-        "rgba(255,120,40,0.35)";
+        "rgba(255,140,60,0.12)";
 
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 2;
 
     ctx.shadowColor =
-        "#ff6622";
+        "rgba(255,120,50,0.5)";
 
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 6;
 
     ctx.stroke();
 
-    /* RED CORE */
+    /* INNER RED GLOW */
 
     ctx.beginPath();
 
     for(let i=0;i<=segments;i++){
 
         const x =
-            canvas.width *
-            i/segments;
+            canvas.width * i / segments;
 
         const y =
             threadY(x);
@@ -195,9 +195,38 @@ function drawThread(){
     }
 
     ctx.strokeStyle =
-        "#ff2222";
+        "rgba(255,60,60,0.4)";
 
     ctx.lineWidth = 1.2;
+
+    ctx.shadowColor =
+        "#ff3333";
+
+    ctx.shadowBlur = 3;
+
+    ctx.stroke();
+
+    /* THREAD CORE */
+
+    ctx.beginPath();
+
+    for(let i=0;i<=segments;i++){
+
+        const x =
+            canvas.width * i / segments;
+
+        const y =
+            threadY(x);
+
+        if(i===0)
+            ctx.moveTo(x,y);
+        else
+            ctx.lineTo(x,y);
+    }
+
+    ctx.strokeStyle = "#ff2a2a";
+
+    ctx.lineWidth = 0.45;
 
     ctx.shadowBlur = 0;
 
@@ -208,7 +237,7 @@ function animate(){
 
     requestAnimationFrame(animate);
 
-    t += 0.002;
+    t += 0.006;
 
     ctx.clearRect(
         0,
@@ -220,17 +249,18 @@ function animate(){
     drawThread();
 
     for(
-        let i = particles.length-1;
+        let i = particles.length - 1;
         i >= 0;
         i--
     ){
 
-        particles[i].update();
-        particles[i].draw();
+        const p = particles[i];
 
-        if(
-            particles[i].life <= 0
-        ){
+        p.update();
+        p.draw();
+
+        if(p.life <= 0){
+
             particles.splice(i,1);
         }
     }
@@ -239,5 +269,6 @@ function animate(){
 animate();
 
 </script>
+
 </body>
 </html>
