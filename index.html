@@ -1,23 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Untold Narratives Thread</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-html, body {
-    margin: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: #000;
+html,
+body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:black;
 }
 
-canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
+canvas{
+    display:block;
 }
 </style>
 </head>
@@ -30,88 +28,72 @@ canvas {
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+function resize(){
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
 }
 resize();
-window.addEventListener("resize", resize);
 
-let time = 0;
+window.addEventListener("resize",resize);
+
+let t = 0;
 
 const particles = [];
 
-/* -------------------------
-   Random Burst Timer
-------------------------- */
+/* THREAD */
 
-let nextBurst =
-    performance.now() +
-    (10000 + Math.random() * 20000);
+function threadY(x){
 
-/* -------------------------
-   Thread Shape
-------------------------- */
+    return canvas.height * 0.5
 
-function threadY(x) {
+        + Math.sin(x * 0.004 + t) * 3
 
-    const centerY = canvas.height * 0.5;
-
-    return centerY
-        + Math.sin(x * 0.015 + time * 1.2) * 2
-        + Math.sin(x * 0.004 + time * 0.5) * 4
-        + Math.sin(x * 0.03 + time * 1.8) * 0.75;
+        + Math.sin(x * 0.01 + t * 0.6) * 1.5;
 }
 
-/* -------------------------
-   Particle
-------------------------- */
+/* PARTICLES */
 
-class Particle {
+class Ember{
 
-    constructor(x, y, direction) {
+    constructor(x,y){
 
         this.x = x;
         this.y = y;
 
+        this.side =
+            Math.random() < 0.5 ? -1 : 1;
+
         this.vx =
-            (Math.random() - 0.5) * 0.08;
+            (Math.random()-0.5) * 0.05;
 
         this.vy =
-            direction *
-            (0.05 + Math.random() * 0.08);
+            this.side *
+            (0.05 + Math.random()*0.08);
 
         this.life = 1;
 
-        this.decay =
-            0.001 +
-            Math.random() * 0.0008;
-
         this.size =
-            0.8 +
-            Math.random() * 1.2;
+            1 + Math.random()*1.5;
     }
 
-    update() {
+    update(){
 
         this.x += this.vx;
         this.y += this.vy;
 
-        this.vx *= 0.998;
-
-        this.life -= this.decay;
+        this.life -= 0.002;
     }
 
-    draw() {
+    draw(){
 
         ctx.save();
 
         ctx.globalAlpha = this.life;
 
-        ctx.shadowColor = "#ff5522";
-        ctx.shadowBlur = 6;
+        ctx.shadowColor = "#ff6622";
+        ctx.shadowBlur = 12;
 
-        ctx.fillStyle = "#ff7744";
+        ctx.fillStyle = "#ff8844";
 
         ctx.beginPath();
         ctx.arc(
@@ -119,7 +101,7 @@ class Particle {
             this.y,
             this.size,
             0,
-            Math.PI * 2
+            Math.PI*2
         );
         ctx.fill();
 
@@ -127,159 +109,106 @@ class Particle {
     }
 }
 
-/* -------------------------
-   Particle Burst
-------------------------- */
+/* BURST SYSTEM */
 
-function createBurst() {
+function createBurst(){
 
-    const count =
-        3 + Math.floor(Math.random() * 3);
+    const amount =
+        3 + Math.floor(Math.random()*3);
 
-    for (let i = 0; i < count; i++) {
+    for(let i=0;i<amount;i++){
 
         const x =
-            Math.random() * canvas.width;
-
-        const y =
-            threadY(x);
-
-        const direction =
-            Math.random() < 0.5 ? -1 : 1;
+            Math.random()*canvas.width;
 
         particles.push(
-            new Particle(
+            new Ember(
                 x,
-                y,
-                direction
+                threadY(x)
             )
         );
     }
 }
 
-/* -------------------------
-   Draw Thread
-------------------------- */
+/* TESTING */
 
-function drawThread() {
+setInterval(()=>{
 
-    const segments = 500;
+    createBurst();
 
-    /* Outer warm glow */
+},5000);
 
-    ctx.save();
+/* DRAW THREAD */
+
+function drawThread(){
+
+    const segments = 400;
+
+    /* BIG ORANGE GLOW */
 
     ctx.beginPath();
 
-    for (let i = 0; i <= segments; i++) {
+    for(let i=0;i<=segments;i++){
 
         const x =
-            (i / segments) * canvas.width;
+            canvas.width *
+            i/segments;
 
         const y =
             threadY(x);
 
-        if (i === 0)
-            ctx.moveTo(x, y);
+        if(i===0)
+            ctx.moveTo(x,y);
         else
-            ctx.lineTo(x, y);
+            ctx.lineTo(x,y);
     }
 
     ctx.strokeStyle =
         "rgba(255,120,40,0.35)";
 
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 6;
 
     ctx.shadowColor =
-        "rgba(255,120,40,0.8)";
+        "#ff6622";
 
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 20;
 
     ctx.stroke();
 
-    ctx.restore();
-
-    /* Mid glow */
-
-    ctx.save();
+    /* RED CORE */
 
     ctx.beginPath();
 
-    for (let i = 0; i <= segments; i++) {
+    for(let i=0;i<=segments;i++){
 
         const x =
-            (i / segments) * canvas.width;
+            canvas.width *
+            i/segments;
 
         const y =
             threadY(x);
 
-        if (i === 0)
-            ctx.moveTo(x, y);
+        if(i===0)
+            ctx.moveTo(x,y);
         else
-            ctx.lineTo(x, y);
+            ctx.lineTo(x,y);
     }
 
     ctx.strokeStyle =
-        "rgba(255,70,50,0.6)";
+        "#ff2222";
 
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.2;
 
-    ctx.shadowColor =
-        "#ff5522";
-
-    ctx.shadowBlur = 6;
-
-    ctx.stroke();
-
-    ctx.restore();
-
-    /* Bright thread core */
-
-    ctx.beginPath();
-
-    for (let i = 0; i <= segments; i++) {
-
-        const x =
-            (i / segments) * canvas.width;
-
-        const y =
-            threadY(x);
-
-        if (i === 0)
-            ctx.moveTo(x, y);
-        else
-            ctx.lineTo(x, y);
-    }
-
-    ctx.strokeStyle =
-        "#ff2a2a";
-
-    ctx.lineWidth = 0.8;
+    ctx.shadowBlur = 0;
 
     ctx.stroke();
 }
 
-/* -------------------------
-   Animation
-------------------------- */
-
-function animate() {
+function animate(){
 
     requestAnimationFrame(animate);
 
-    time += 0.002;
-
-    const now =
-        performance.now();
-
-    if (now > nextBurst) {
-
-        createBurst();
-
-        nextBurst =
-            now +
-            (10000 + Math.random() * 20000);
-    }
+    t += 0.002;
 
     ctx.clearRect(
         0,
@@ -290,20 +219,19 @@ function animate() {
 
     drawThread();
 
-    for (
-        let i = particles.length - 1;
+    for(
+        let i = particles.length-1;
         i >= 0;
         i--
-    ) {
+    ){
 
-        const p =
-            particles[i];
+        particles[i].update();
+        particles[i].draw();
 
-        p.update();
-        p.draw();
-
-        if (p.life <= 0) {
-            particles.splice(i, 1);
+        if(
+            particles[i].life <= 0
+        ){
+            particles.splice(i,1);
         }
     }
 }
@@ -311,6 +239,5 @@ function animate() {
 animate();
 
 </script>
-
 </body>
 </html>
