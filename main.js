@@ -1,66 +1,50 @@
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
-const canvas =
-document.getElementById("bg");
+const canvas = document.getElementById("bg");
 
-const scene =
-new THREE.Scene();
-
-const camera =
-new THREE.OrthographicCamera(
-    -1,
-    1,
-    1,
-    -1,
-    0.1,
-    10
-);
-
-camera.position.z = 1;
-
-const renderer =
-new THREE.WebGLRenderer({
+const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias:true,
-    alpha:false
+    antialias:true
 });
-
-renderer.setPixelRatio(
-    Math.min(
-        window.devicePixelRatio,
-        2
-    )
-);
 
 renderer.setSize(
     window.innerWidth,
     window.innerHeight
 );
 
-const mouse =
-new THREE.Vector2(0.5,0.5);
+renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio,2)
+);
 
-const targetMouse =
-new THREE.Vector2(0.5,0.5);
+const scene = new THREE.Scene();
 
-const velocity =
-new THREE.Vector2();
+const camera =
+new THREE.OrthographicCamera(
+    -1,1,1,-1,0.1,10
+);
 
-const raycaster =
-new THREE.Raycaster();
+camera.position.z = 1;
+
+const mouse = new THREE.Vector2(0.5,0.5);
+const targetMouse = new THREE.Vector2(0.5,0.5);
+const velocity = new THREE.Vector2();
+
+let prevX = 0.5;
+let prevY = 0.5;
 
 const uniforms = {
 
-    uTime:{
-        value:0
-    },
+    uTime:{value:0},
 
-    uMouse:{
-        value:mouse
-    },
+    uMouse:{value:mouse},
 
-    uVelocity:{
-        value:velocity
+    uVelocity:{value:velocity},
+
+    uResolution:{
+        value:new THREE.Vector2(
+            window.innerWidth,
+            window.innerHeight
+        )
     }
 
 };
@@ -79,13 +63,9 @@ void main(){
     vUv = uv;
 
     gl_Position =
-        vec4(
-            position,
-            1.0
-        );
+        vec4(position,1.0);
 
 }
-
 `,
 
 fragmentShader:`
@@ -95,6 +75,7 @@ precision highp float;
 uniform float uTime;
 uniform vec2 uMouse;
 uniform vec2 uVelocity;
+uniform vec2 uResolution;
 
 varying vec2 vUv;
 
@@ -104,12 +85,9 @@ float hash(vec2 p){
         sin(
             dot(
                 p,
-                vec2(
-                    127.1,
-                    311.7
-                )
+                vec2(127.1,311.7)
             )
-        ) * 43758.5453
+        )*43758.5453123
     );
 
 }
@@ -124,8 +102,7 @@ float noise(vec2 p){
     float c=hash(i+vec2(0.,1.));
     float d=hash(i+vec2(1.,1.));
 
-    vec2 u=
-        f*f*(3.-2.*f);
+    vec2 u=f*f*(3.-2.*f);
 
     return mix(a,b,u.x)
         +(c-a)*u.y*(1.-u.x)
@@ -144,210 +121,219 @@ float fbm(vec2 p){
 
         p*=2.0;
 
-        a*=0.5;
+        a*=0.55;
+
     }
 
     return v;
 
 }
 
+vec2 curl(vec2 p){
+
+    float e = 0.01;
+
+    float n1 =
+        fbm(p+vec2(0.0,e));
+
+    float n2 =
+        fbm(p-vec2(0.0,e));
+
+    float a =
+        (n1-n2)/(2.0*e);
+
+    float n3 =
+        fbm(p+vec2(e,0.0));
+
+    float n4 =
+        fbm(p-vec2(e,0.0));
+
+    float b =
+        (n3-n4)/(2.0*e);
+
+    return vec2(
+        a,
+        -b
+    );
+
+}
+
 void main(){
 
-    vec2 uv=vUv;
+    vec2 uv = vUv;
 
-    float t=uTime*0.04;
+    float t =
+        uTime * 0.03;
 
-    vec2 p=uv*0.18;
+    vec2 p =
+        uv * 1.2;
 
-    vec2 warp=
+    vec2 flow1 =
+        curl(
+            p +
+            vec2(
+                t,
+                t*0.5
+            )
+        );
 
-        vec2(
-
-            fbm(
-                p*2.0+
-                t
-            ),
-
-            fbm(
-                p*2.0-
+    vec2 flow2 =
+        curl(
+            p*1.8 -
+            vec2(
+                t*0.3,
                 t
             )
-
         );
 
-    p += warp*2.6;
+    p += flow1 * 0.7;
+    p += flow2 * 0.4;
 
-    vec2 away=
+    vec2 away =
         uv-uMouse;
 
-    float d=
-        length(
-            away
-        );
+    float d =
+        length(away);
 
     p +=
-    normalize(
-        away + 0.0001
-    )
-    *
-    exp(
-        -d * 7.0
-    )
-    *
-    length(
-        uVelocity
-    )
-    *
-    0.05;
 
-    float density =
-
-    fbm(
-        p +
-        vec2(
-            t*0.25,
-            t*0.1
+        normalize(
+            away+0.0001
         )
-    );
 
-density +=
+        *
 
-    0.75 *
+        exp(
+            -d*8.0
+        )
 
-    fbm(
-        p*1.4 -
-        t*0.15
-    );
+        *
 
-density *= 0.55;
+        length(
+            uVelocity
+        )
 
-density =
-    smoothstep(
-        0.20,
-        0.65,
-        density
-    );
+        *
 
-    vec3 color=
+        0.04;
+
+    float dye =
+
+        fbm(
+            p+
+            vec2(
+                t*0.2,
+                t*0.1
+            )
+        );
+
+    dye +=
+
+        0.6 *
+
+        fbm(
+            p*1.5 -
+            t*0.15
+        );
+
+    dye *= 0.55;
+
+    dye =
+        smoothstep(
+            0.28,
+            0.72,
+            dye
+        );
+
+    vec3 color =
         vec3(0.0);
 
     color +=
 
         vec3(
-            0.25,
+            0.04,
             0.0,
             0.0
         )
 
         *
 
-        density;
+        dye;
 
     color +=
 
         vec3(
-            0.6,
-            0.03,
-            0.03
+            0.18,
+            0.01,
+            0.01
         )
 
         *
 
         pow(
-            density,
-            1.5
+            dye,
+            2.0
         );
 
-    vec3 color = vec3(0.0);
+    color *= 0.75;
 
-color +=
-    vec3(
-        0.18,
-        0.0,
-        0.0
-    )
-    * density;
-
-color +=
-    vec3(
-        0.7,
-        0.04,
-        0.04
-    )
-    *
-    pow(
-        density,
-        2.0
-    );
-
-gl_FragColor =
-    vec4(
-        color,
-        1.0
-    );
+    gl_FragColor =
+        vec4(
+            color,
+            1.0
+        );
 
 }
-
 `
 
 });
 
-const mesh =
+const plane =
 new THREE.Mesh(
-    new THREE.PlaneGeometry(
-        2,
-        2
-    ),
+    new THREE.PlaneGeometry(2,2),
     material
 );
 
-scene.add(mesh);
+scene.add(plane);
 
-let previousX = 0.5;
-let previousY = 0.5;
+window.addEventListener("mousemove",(e)=>{
 
-window.addEventListener(
-    "mousemove",
-    e=>{
+    const x =
+        e.clientX /
+        window.innerWidth;
 
-        const x =
-            e.clientX /
-            window.innerWidth;
-
-        const y =
-            1 -
-            (
-                e.clientY /
-                window.innerHeight
-            );
-
-        velocity.set(
-            x-previousX,
-            y-previousY
-        );
-
-        previousX=x;
-        previousY=y;
-
-        targetMouse.set(
-            x,
-            y
-        );
-
-    }
-);
-
-window.addEventListener(
-    "resize",
-    ()=>{
-
-        renderer.setSize(
-            window.innerWidth,
+    const y =
+        1 -
+        (
+            e.clientY /
             window.innerHeight
         );
 
-    }
-);
+    velocity.set(
+        x-prevX,
+        y-prevY
+    );
+
+    prevX=x;
+    prevY=y;
+
+    targetMouse.set(x,y);
+
+});
+
+window.addEventListener("resize",()=>{
+
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
+
+    uniforms.uResolution.value.set(
+        window.innerWidth,
+        window.innerHeight
+    );
+
+});
 
 function animate(){
 
@@ -357,7 +343,7 @@ function animate(){
 
     mouse.lerp(
         targetMouse,
-        0.06
+        0.08
     );
 
     velocity.multiplyScalar(
