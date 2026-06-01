@@ -157,7 +157,7 @@ void main(){
 
     float t=uTime*0.04;
 
-    vec2 p=uv*0.35;
+    vec2 p=uv*0.18;
 
     vec2 warp=
 
@@ -175,7 +175,7 @@ void main(){
 
         );
 
-    p += warp*1.4;
+    p += warp*2.6;
 
     vec2 away=
         uv-uMouse;
@@ -186,55 +186,47 @@ void main(){
         );
 
     p +=
+    normalize(
+        away + 0.0001
+    )
+    *
+    exp(
+        -d * 7.0
+    )
+    *
+    length(
+        uVelocity
+    )
+    *
+    0.05;
 
-        normalize(
-            away+0.0001
+    float density =
+
+    fbm(
+        p +
+        vec2(
+            t*0.25,
+            t*0.1
         )
+    );
 
-        *
+density +=
 
-        exp(
-            -d*12.0
-        )
+    0.75 *
 
-        *
+    fbm(
+        p*1.4 -
+        t*0.15
+    );
 
-        length(
-            uVelocity
-        )
+density *= 0.55;
 
-        *
-
-        0.15;
-
-    float density=
-
-        fbm(
-            p+
-            vec2(
-                t*0.4,
-                t*0.2
-            )
-        );
-
-    density +=
-
-        0.5*
-
-        fbm(
-            p*1.8-
-            t*0.3
-        );
-
-    density *= 0.7;
-
-    density=
-
-        smoothstep(
-            0.20,
-            0.60,
-            density
-        );
+density =
+    smoothstep(
+        0.20,
+        0.65,
+        density
+    );
 
     vec3 color=
         vec3(0.0);
@@ -266,9 +258,31 @@ void main(){
             1.5
         );
 
-    gl_FragColor =
+    vec3 color = vec3(0.0);
+
+color +=
+    vec3(
+        0.18,
+        0.0,
+        0.0
+    )
+    * density;
+
+color +=
+    vec3(
+        0.7,
+        0.04,
+        0.04
+    )
+    *
+    pow(
+        density,
+        2.0
+    );
+
+gl_FragColor =
     vec4(
-        vec3(density),
+        color,
         1.0
     );
 
