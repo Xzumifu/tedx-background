@@ -40,18 +40,30 @@ let time = 0;
 const particles = [];
 
 class Particle {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
+    constructor(x,y,direction){
 
-        this.vx = (Math.random() - 0.5) * 0.2;
-        this.vy = -Math.random() * 0.6 - 0.15;
+    this.x = x;
+    this.y = y;
 
-        this.life = 1;
-        this.decay = 0.006 + Math.random() * 0.008;
+    this.direction = direction;
 
-        this.size = Math.random() * 2 + 0.5;
-    }
+    this.vx =
+        (Math.random()-0.5)*0.1;
+
+    this.vy =
+        direction *
+        (0.08 + Math.random()*0.12);
+
+    this.life = 1;
+
+    this.decay =
+        0.001 +
+        Math.random()*0.001;
+
+    this.size =
+        0.8 +
+        Math.random()*1.5;
+}
 
     update() {
         this.x += this.vx;
@@ -69,7 +81,7 @@ class Particle {
         ctx.globalAlpha = alpha;
 
         ctx.shadowColor = "#ff2222";
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 6;
 
         ctx.fillStyle = "#ff4444";
 
@@ -139,13 +151,34 @@ function animate() {
 
     requestAnimationFrame(animate);
 
-    time += 0.01;
+    time += 0.002;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     drawThread();
 
-    spawnParticles();
+    function createBurst() {
+
+    const count = 3 + Math.floor(Math.random() * 3);
+
+    for(let i = 0; i < count; i++) {
+
+        const x = Math.random() * canvas.width;
+        const y = threadY(x);
+
+        particles.push(
+            new Particle(
+                x,
+                y,
+                Math.random() < 0.5 ? -1 : 1
+            )
+        );
+    }
+}
+
+    let nextBurst =
+    performance.now() +
+    (10000 + Math.random() * 20000);
 
     for (let i = particles.length - 1; i >= 0; i--) {
 
@@ -161,6 +194,17 @@ function animate() {
 }
 
 animate();
+
+    const now = performance.now();
+
+if(now > nextBurst){
+
+    createBurst();
+
+    nextBurst =
+        now +
+        (10000 + Math.random()*20000);
+}
 </script>
 
 </body>
