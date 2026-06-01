@@ -231,8 +231,8 @@ void main(){
     density=
 
         smoothstep(
-            0.42,
-            0.82,
+            0.20,
+            0.60,
             density
         );
 
@@ -242,7 +242,7 @@ void main(){
     color +=
 
         vec3(
-            0.05,
+            0.25,
             0.0,
             0.0
         )
@@ -254,23 +254,23 @@ void main(){
     color +=
 
         vec3(
-            0.16,
-            0.01,
-            0.01
+            0.6,
+            0.03,
+            0.03
         )
 
         *
 
         pow(
             density,
-            2.0
+            1.5
         );
 
-    gl_FragColor=
-        vec4(
-            color,
-            1.0
-        );
+    gl_FragColor =
+    vec4(
+        vec3(density),
+        1.0
+    );
 
 }
 
